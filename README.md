@@ -1,7 +1,7 @@
 # jCalendar
 Persian Calendar functions
 
-[![Latest Stable Version](https://poser.pugx.org/ahhp/jCalendar)](//packagist.org/packages/ahhp/jCalendar) [![Total Downloads](https://poser.pugx.org/ahhp/jCalendar/downloads)](//packagist.org/packages/ahhp/jCalendar) [![Latest Unstable Version](https://poser.pugx.org/ahhp/jCalendar/v/unstable)](//packagist.org/packages/ahhp/jCalendar) [![License](https://poser.pugx.org/ahhp/jCalendar/license)](//packagist.org/packages/ahhp/jCalendar)
+[![Latest Stable Version](https://poser.pugx.org/ahhp/jcalendar/v)](//packagist.org/packages/ahhp/jcalendar) [![Total Downloads](https://poser.pugx.org/ahhp/jcalendar/downloads)](//packagist.org/packages/ahhp/jcalendar) [![Latest Unstable Version](https://poser.pugx.org/ahhp/jcalendar/v/unstable)](//packagist.org/packages/ahhp/jcalendar) [![License](https://poser.pugx.org/ahhp/jcalendar/license)](//packagist.org/packages/ahhp/jcalendar)
 
 Usage:
 ```php
