@@ -1,0 +1,27 @@
+{
+  "name": "ahhp/jcalendar",
+  "description": "Persian Calendar Converter",
+  "keywords": [
+    "persiab",
+    "jalali",
+    "calendar",
+    "date"
+  ],
+  "type": "library",
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "AmirHossein",
+      "email": "amir.hossein.hp@gmail.com"
+    }
+  ],
+  "minimum-stability": "dev",
+  "autoload": {
+    "psr-4": {
+      "ahhp\\jCalendar\\": "src/"
+    }
+  },
+  "require": {
+    "php": ">=7"
+  }
+}
