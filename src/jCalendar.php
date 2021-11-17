@@ -3,35 +3,30 @@
 namespace ahhp\jCalendar;
 
 class jCalendar {
-    private $format = [];
-    private $jformat = [];
-    public $farsiDigits;
-
-    public function __construct($farsiDigits = true) {
-        $this->farsiDigits = $farsiDigits;
-    }
+    private static $persianDayNames = [
+        ["ش", "ی", "د", "س", "چ", "پ", "ج"],
+        ["شنبه", "یکشنبه", "دوشنبه", "سه‌شنبه", "چهارشنبه", "پنجشنبه", "جمعه"]
+    ];
+    private static $persianMonthNames = [
+        ["فروردین", "اردیبهشت", "خرداد", "تير", "مرداد", "شهریور", "مهر", "آبان", "آذر", "دى", "بهمن", "اسفند"],
+        ["فروردین", "اردیبهشت", "خرداد", "تير", "مرداد", "شهریور", "مهر", "آبان", "آذر", "دى", "بهمن", "اسفند"]
+    ];
+    private static $persianDayTimes = ["pm" => "ب.ظ", "am" => "ق.ظ", "PM" => "بعد از ظهر", "AM" => "قبل از ظهر"];
+    private static $persianOrdinalSuffix = "ام";
+    private static $persianNumbers = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
 
     /**
      * PHP::getdate() in Jalali result
      *
      * @param $timestamp int|null  Unix Timestamp
+     * @param bool $translate bool  Whether translate the number or not
      * @return array Date data on standard getdate result array
      */
-    public function getdate(int $timestamp = null) {
+    public static function getdate(int $timestamp = null, bool $translate = true): array {
         $timestamp = $timestamp ?? time();
-        $this->jdate('', $timestamp);
-        $getDate = getdate($timestamp);
-        $getDate['mday'] = $this->jformat['j'];
-        $getDate['wday'] = $this->jformat['w'];
-        $getDate['mon'] = $this->jformat['n'];
-        $getDate['year'] = $this->jformat['Y'];
-        $getDate['yday'] = $this->jformat['z'];
-        $getDate['weekday'] = $this->jformat['l'];
-        $getDate['month'] = $this->jformat['F'];
-        foreach ($getDate as $key => $value) {
-            $getDate[$key] = $this->_translateDigits($value);
-        }
-        $getDate[0] = $timestamp;
+        $getDate = [$timestamp];
+        list($getDate['mday'], $getDate['wday'], $getDate['mon'], $getDate['year'], $getDate['yday'], $getDate['weekday'], $getDate['month'])
+            = explode('|', self::date('j|w|n|Y|z|l|F', $timestamp, $translate));
         return $getDate;
     }
 
@@ -46,15 +41,10 @@ class jCalendar {
      * @param $year int|null  Standard Jalali year
      * @return int Unix Timestamp (GREGORIAN)
      */
-    public function mktime(int $hour = null, int $minute = null, int $second = null, int $month = null, int $day = null, int $year = null) {
-        $this->jdate('Y');
-        $year = $year === null ? $this->jformat['Y'] : $year;
-        $month = $month === null ? $this->jformat['n'] : $month;
-        $day = $day === null ? $this->jformat['j'] : $day;
-        $hour = $hour === null ? $this->jformat['h'] : $hour;
-        $minute = $minute === null ? $this->jformat['i'] : $minute;
-        $second = $second === null ? $this->jformat['s'] : $second;
-        list($year, $month, $day) = $this->jalali_to_gregorian($year, $month, $day);
+    public static function mktime(int $hour = null, int $minute = null, int $second = null, int $month = null, int $day = null, int $year = null): int {
+        $fmt = ($hour ?? 'H') . '|' . ($minute ?? 'i') . '|' . ($second ?? 's') . '|' . ($month ?? 'n') . '|' . ($day ?? 'j') . '|' . ($year ?? 'Y');
+        list($hour, $minute, $second, $month, $day, $year) = explode('|', self::date($fmt, null, false));
+        list($year, $month, $day) = self::jalali_to_gregorian($year, $month, $day);
         return mktime($hour, $minute, $second, $month, $day, $year);
     }
 
@@ -63,92 +53,147 @@ class jCalendar {
      *
      * @param $format string  Standard PHP::date() format
      * @param $stamp int|null  Unix Timestamp
-     * @param $GMT int|null  Difference to server time in seconds
+     * @param bool $translate bool  Whether translate the number or not
      * @return string Converted input
      */
-    public function date(string $format, int $stamp = null, int $GMT = null) {
-        $GMT = $GMT ?? date("Z");
-        $stamp = ($stamp ?? time()) + $GMT;
-        $formatArr = [
-            'd', 'D', 'j', 'l', 'N', 'S', 'w', 'z', 'W', 'F', 'm', 'M', 'n', 't', 'L', 'o', 'Y', 'y',
-            'a', 'A', 'B', 'g', 'G', 'h', 'H', 'i', 's', 'u', 'e', 'I', 'O', 'P', 'T', 'Z', 'c', 'r', 'U'
-        ];
-        $_weekdays = ["saturday", "sunday", "monday", "tuesday", "wednesday", "thursday", "friday"];
-
+    public static function date(string $fmt, int $stamp = null, bool $translate = true): string {
+        $format = [];
+        $gmt = $gmt ?? date("Z");
+        $stamp = ($stamp ?? time()) + $gmt;
+        $matches = [];
+        preg_match_all("(a|A|B|D|e|g|G|h|H|i|I|l|o|T|s|u|U|Z)", $fmt, $matches);
+        $formatArr = array_merge($matches[0], ['Y', 'n', 'j']);
         $fullFormat = explode("|", date(join("|", $formatArr), $stamp));
         for ($i = 0, $count = count($formatArr); $i < $count; $i += 1) {
-            $this->format[$formatArr[$i]] = $fullFormat[$i];
+            $format[$formatArr[$i]] = $fullFormat[$i];
         }
-        list($this->jformat['Y'], $this->jformat['m'], $this->jformat['d']) = $this->gregorian_to_jalali($this->format['Y'], $this->format['m'], $this->format['d']);
-        $this->jformat['a'] = ($this->format['a'] == "pm") ? "ب.ظ" : "ق.ظ";
-        $this->jformat['A'] = ($this->format['A'] == "PM") ? "بعد از ظهر" : "قبل از ظهر";
-        $this->jformat['B'] = $this->format['B'];
-        $this->jformat['D'] = ["ش", "ی", "د", "س", "چ", "پ", "ج"][array_search(strtolower($this->format['D']), ["sat", "sun", "mon", "tue", "wed", "thu", "fri"])];
-        $this->jformat['F'] = $this->_getMonthName($this->jformat['m']);
-        $this->jformat['h'] = $this->format['h'];
-        $this->jformat['H'] = $this->format['H'];
-        $this->jformat['g'] = $this->format['g'];
-        $this->jformat['G'] = $this->format['G'];
-        $this->jformat['i'] = $this->format['i'];
-        $this->jformat['j'] = $this->jformat['d'];
-        $this->jformat['d'] = ($this->jformat['d'] < 10) ? "0" . $this->jformat['d'] : $this->jformat['d'];
-        $this->jformat['l'] = ["شنبه", "یکشنبه", "دوشنبه", "سه‌شنبه", "چهارشنبه", "پنجشنبه", "جمعه"][array_search(strtolower($this->format['l']), $_weekdays)];
-        $ka = date("L", (time() - 31536000)); // previous Gregorian year
-        $this->jformat['L'] = ($ka == 1) ? 1 : 0;
-        $this->jformat['n'] = $this->jformat['m'];
-        $this->jformat['m'] = ($this->jformat['m'] < 10) ? "0" . $this->jformat['m'] : $this->jformat['m'];
-        $this->jformat['M'] = $this->jformat['F'];
-        $this->jformat['N'] = 1 + array_search(strtolower($this->format['l']), $_weekdays);
-        $this->jformat['o'] = $this->jformat['Y'];
-        $this->jformat['w'] = $this->jformat['N'] - 1;
-        $this->jformat['t'] = ($this->jformat['m'] <= 6) ? 31 : 30;
-        $this->jformat['t'] = ($this->jformat['m'] == 12) ? ($this->jformat['L'] == 1 ? 30 : 29) : $this->jformat['t'];
-        $this->jformat['s'] = $this->format['s'];
-        $this->jformat['S'] = "ام";
-        $this->jformat['e'] = $this->format['e'];
-        $this->jformat['I'] = $this->format['I'];
-        $this->jformat['u'] = $this->format['u'];
-        $this->jformat['U'] = $this->format['U'];
-        $this->jformat['y'] = $this->jformat['Y'] % 100;
-        $this->jformat['Z'] = $this->format['Z'];
-        $this->jformat['z'] = ($this->jformat['n'] > 6 ? 186 + (($this->jformat['n'] - 6 - 1) * 30) : ($this->jformat['n'] - 1) * 31) + $this->jformat['j'];
-        $this->jformat['W'] = ceil($this->jformat['z'] / 7);
-        $positive_z = abs(($this->jformat['Z']) / 3600);
-        $z_hour = str_pad((int)$positive_z, 2, '0', STR_PAD_LEFT);
-        $z_minute = str_pad(($positive_z - ($positive_z > 1 ? $z_hour : 0)) * 60, 2, '0', STR_PAD_LEFT);
-        $this->jformat['P'] = ($this->jformat['Z'] >= 0 ? "+" : "-") . "$z_hour:$z_minute";
-        $this->jformat['O'] = ($this->jformat['Z'] >= 0 ? "+" : "-") . $z_hour . $z_minute;
-        $this->jformat['c'] = $this->jformat['Y'] . "-" . $this->jformat['m'] . "-" . $this->jformat['d'] . "-" . $this->jformat['H'] . " " . $this->jformat['i'] . ":" . $this->jformat['s'] . $this->jformat['P'];
-        $this->jformat['r'] = $this->jformat['l'] . " " . $this->jformat['j'] . " " . $this->jformat['F'] . " " . $this->jformat['Y'] . " " . $this->jformat['h'] . ":" . $this->jformat['i'] . ":" . $this->jformat['s'] . " " . $this->jformat['O'];
-        $this->jformat['T'] = $this->format['T'];
 
-        foreach ($formatArr as $key) {
-            $format = str_replace($key, $this->jformat[$key], $format);
+        list($format['Y'], $format['n'], $format['j']) = self::gregorian_to_jalali($format['Y'], $format['n'], $format['j']);
+
+        $result = '';
+        for ($i = 0; $i < strlen($fmt); $i += 1) {
+            $char = $fmt[$i];
+            $tch = $char;
+            switch ($char) {
+                // Day
+                case 'd':
+                    $tch = str_pad($format['j'], 2, '0', STR_PAD_LEFT);
+                    break;
+                case 'D':
+                    $tch = self::$persianDayNames[0][array_search(strtolower($format['D']), ["sat", "sun", "mon", "tue", "wed", "thu", "fri"])];
+                    break;
+                case 'l':
+                    $tch = self::$persianDayNames[1][array_search(strtolower($format['l']), ["saturday", "sunday", "monday", "tuesday", "wednesday", "thursday", "friday"])];
+                    break;
+                case 'N':
+                case 'w':
+                    $tch = array_search(strtolower(date('l', $stamp)), ["saturday", "sunday", "monday", "tuesday", "wednesday", "thursday", "friday"]);
+                    if ($char == 'N') {
+                        $tch += 1;
+                    }
+                    break;
+                case 'S':
+                    $tch = self::$persianOrdinalSuffix;
+                    break;
+                case 'z':
+                    $tch = ($format['n'] > 6 ? 186 + (($format['n'] - 6 - 1) * 30) : ($format['n'] - 1) * 31) + $format['j'];
+                    break;
+
+                // Week
+                case 'W':
+                    $tch = ceil(self::date('z', $stamp, false) / 7);
+                    break;
+
+                // Month
+                case 'F':
+                    $tch = self::$persianMonthNames[0][$format['n'] - 1];
+                    break;
+                case 'm':
+                    $tch = str_pad($format['n'], 2, '0', STR_PAD_LEFT);
+                    break;
+                case 'M':
+                    $tch = self::$persianMonthNames[1][$format['n'] - 1];
+                    break;
+                case 't':
+                    $tch = $format['n'] < 7 ? 31 : ($format['n'] < 12 || self::date('L', $stamp, false) == 1 ? 30 : 29);
+                    break;
+
+                // Year
+                case 'L':
+                    $tch = date("L", (time() - 31536000)) == 1 ? 1 : 0; // previous Gregorian year
+                    break;
+                case 'o':
+                    $tch = self::gregorian_to_jalali($format['o'], $format['n'], $format['j'])[0];
+                    break;
+                case 'y':
+                    $tch = str_pad($format['Y'] % 100, 2, '0', STR_PAD_LEFT);
+                    break;
+
+                // Time
+                case 'a':
+                    $tch = self::$persianDayTimes[$format['a']];
+                    break;
+                case 'A':
+                    $tch = self::$persianDayTimes[$format['A']];
+                    break;
+                case 'v':
+                    $tch = (int)self::date('u', $stamp, false) / 1000;
+                    break;
+
+                // Timezone
+                case 'O':
+                case 'p':
+                case 'P':
+                    $z = self::date('Z', $stamp, false);
+                    $positive_z = abs((int)($z) / 3600);
+                    $z_hour = str_pad((int)$positive_z, 2, '0', STR_PAD_LEFT);
+                    $z_minute = str_pad(($positive_z - ($positive_z > 1 ? $z_hour : 0)) * 60, 2, '0', STR_PAD_LEFT);
+                    $z_sign = $z >= 0 ? "+" : "-";
+                    $tch = $char == 'O' ? $z_sign . $z_hour . $z_minute : ($char == 'p' && $z_hour == '00' && $z_minute == '00' ? 'Z' : $z_sign . $z_hour . ':' . $z_minute);
+                    break;
+
+                // Fill Date.Time
+                case 'c':
+                    $tch = self::date('Y-m-dTH:i:sP', $stamp, $translate);
+                    break;
+                case 'r':
+                    $tch = self::date('l j F Y h:i:s O', $stamp, $translate);
+                    break;
+
+                case 'B':
+                case 'e':
+                case 'g':
+                case 'G':
+                case 'h':
+                case 'H':
+                case 'i':
+                case 'I':
+                case 'j':
+                case 'n':
+                case 'T':
+                case 's':
+                case 'u':
+                case 'U':
+                case 'Y':
+                case 'Z':
+                    $tch = $format[$char];
+                    break;
+            }
+
+            $result .= $translate ? self::translate($tch) : $tch;
         }
-        return $this->_translateDigits($format);
+        return $result;
     }
 
-    public function jdate($format, $stamp = null, $GMT = null) {
-        return $this->date($format, $stamp, $GMT);
-    }
-
-    /**
-     * Built-in methods
-     */
-    private function _getMonthName($index) {
-        return [null, "فروردین", "اردیبهشت", "خرداد", "تير", "مرداد", "شهریور", "مهر", "آبان", "آذر", "دى", "بهمن", "اسفند"][$index];
-    }
-
-    private function _translateDigits($str) {
-        return !$this->farsiDigits ? $str
-            : str_replace(['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'], ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'], $str);
+    private static function translate($str) {
+        return str_replace(['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'], self::$persianNumbers, $str);
     }
 
     /**
      * Conversion methods
      * Thanks to Roozbeh Pournader and Mohammad Toosi for their Date Conversion program
      */
-    public function gregorian_to_jalali($g_y, $g_m, $g_d) {
+    public static function gregorian_to_jalali(int $g_y, int $g_m, int $g_d): array {
         $g_days_in_month = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
         $j_days_in_month = [31, 31, 31, 31, 31, 31, 30, 30, 30, 30, 30, 29];
         $gy = $g_y - 1600;
@@ -173,7 +218,7 @@ class jCalendar {
         return [$jy, $jm, $jd];
     }
 
-    public function jalali_to_gregorian($j_y, $j_m, $j_d) {
+    public static function jalali_to_gregorian(int $j_y, int $j_m, int $j_d): array {
         $g_days_in_month = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
         $j_days_in_month = [31, 31, 31, 31, 31, 31, 30, 30, 30, 30, 30, 29];
         $jy = $j_y - 979;
